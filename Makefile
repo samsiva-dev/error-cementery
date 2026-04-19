@@ -7,7 +7,7 @@ build:
 	go build -ldflags="-s -w" -o $(BIN_DIR)/$(BINARY) ./cmd/cemetery
 
 install: build
-	cp $(BIN_DIR)/$(BINARY) /usr/local/bin/$(BINARY)
+	cp $(BIN_DIR)/$(BINARY) ./
 
 clean:
 	rm -rf $(BIN_DIR)/
