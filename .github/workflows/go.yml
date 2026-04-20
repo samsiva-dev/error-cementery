@@ -26,5 +26,5 @@ jobs:
     - name: Upload binary
       uses: actions/upload-artifact@v4
       with:
-        name: cemetery-binary
-        path: cemetery
+        name: cemetery
+        path: myapp
