@@ -23,13 +23,29 @@ type ClaudeConfig struct {
 }
 
 func DefaultPath() string {
+	exe, err := os.Executable()
+	if err == nil {
+		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+			exe = resolved
+		}
+		return filepath.Join(filepath.Dir(exe), "config.toml")
+	}
+	// fallback: OS config dir
 	dir, _ := os.UserConfigDir()
 	return filepath.Join(dir, "cemetery", "config.toml")
 }
 
 func DefaultDBPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".local", "share", "cemetery", "cemetery.db")
+	exe, err := os.Executable()
+	if err == nil {
+		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+			exe = resolved
+		}
+		return filepath.Join(filepath.Dir(exe), "cemetery.db")
+	}
+	// fallback: alongside config file
+	dir, _ := os.UserConfigDir()
+	return filepath.Join(dir, "cemetery", "cemetery.db")
 }
 
 func Load() (*Config, error) {

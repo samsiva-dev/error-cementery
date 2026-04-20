@@ -115,7 +115,10 @@ func renderGravestone(r match.MatchResult, selected, expanded bool, width int) s
 		fixLines = truncate(fixLines, width-8)
 	}
 
-	metaParts := []string{b.BuriedAt.Format("02 Jan 2006")}
+	metaParts := []string{
+		fmt.Sprintf("#%d", b.ID),
+		b.BuriedAt.Format("02 Jan 2006"),
+	}
 	if b.TimesDug > 0 {
 		metaParts = append(metaParts, fmt.Sprintf("dug %d×", b.TimesDug))
 	}
@@ -183,5 +186,3 @@ func RunDig(results []match.MatchResult) error {
 	_, err := p.Run()
 	return err
 }
-
-

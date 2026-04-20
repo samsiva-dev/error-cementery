@@ -1,18 +1,20 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/atotto/clipboard"
-	"github.com/spf13/cobra"
 	"github.com/samsiva-dev/error-cemetery/internal/ai"
 	"github.com/samsiva-dev/error-cemetery/internal/config"
 	"github.com/samsiva-dev/error-cemetery/internal/db"
 	"github.com/samsiva-dev/error-cemetery/internal/match"
 	"github.com/samsiva-dev/error-cemetery/internal/tui"
+	"github.com/spf13/cobra"
 )
 
 func main() {
@@ -30,13 +32,56 @@ and dig them up when history repeats itself.`,
 	}
 
 	root.AddCommand(
+		initCmd(),
 		buryCmd(),
+		unburyCmd(),
 		digCmd(),
 		visitCmd(),
 		statsCmd(),
 		configCmd(),
+		exportCmd(),
 	)
 	return root
+}
+
+// ── init ──────────────────────────────────────────────────────────────────────
+
+func initCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "init",
+		Short: "Initialise config and database for first use",
+		Long: `Creates the config file and database if they do not exist.
+Safe to run multiple times — existing files are never overwritten.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+
+			// Write config only if it doesn't already exist.
+			cfgPath := config.DefaultPath()
+			if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
+				if err := config.Write(cfg); err != nil {
+					return fmt.Errorf("write config: %w", err)
+				}
+				fmt.Printf("  Created config:   %s\n", cfgPath)
+			} else {
+				fmt.Printf("  Config exists:    %s\n", cfgPath)
+			}
+
+			// Open DB — db.Open creates the directory and applies the schema.
+			store, err := openStore(cfg)
+			if err != nil {
+				return fmt.Errorf("init database: %w", err)
+			}
+			store.Close()
+			fmt.Printf("  Database ready:   %s\n", cfg.Cemetery.DBPath)
+
+			fmt.Println()
+			fmt.Println("⚰  Cemetery ready. Run `cemetery bury` to bury your first error.")
+			return nil
+		},
+	}
 }
 
 // ── bury ──────────────────────────────────────────────────────────────────────
@@ -256,8 +301,136 @@ func configCmd() *cobra.Command {
 	return cmd
 }
 
+// ── unbury ───────────────────────────────────────────────────────────────────
+
+func unburyCmd() *cobra.Command {
+	var force bool
+
+	cmd := &cobra.Command{
+		Use:   "unbury <id>",
+		Short: "Permanently delete a buried error by ID",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id, err := strconv.ParseInt(args[0], 10, 64)
+			if err != nil || id <= 0 {
+				return fmt.Errorf("invalid id %q — must be a positive integer", args[0])
+			}
+
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+			store, err := openStore(cfg)
+			if err != nil {
+				return err
+			}
+			defer store.Close()
+
+			burial, err := store.GetByID(id)
+			if err != nil {
+				return fmt.Errorf("no entry with id %d", id)
+			}
+
+			if !force {
+				fmt.Printf("Unbury id %d: %s\n", burial.ID, firstLine(burial.ErrorText))
+				fmt.Print("Are you sure? [y/N] ")
+				scanner := bufio.NewScanner(os.Stdin)
+				scanner.Scan()
+				if strings.ToLower(strings.TrimSpace(scanner.Text())) != "y" {
+					fmt.Println("Cancelled.")
+					return nil
+				}
+			}
+
+			if err := store.Delete(id); err != nil {
+				return fmt.Errorf("delete: %w", err)
+			}
+			fmt.Printf("⚰  Entry %d removed.\n", id)
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation prompt")
+	return cmd
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 func openStore(cfg *config.Config) (*db.Store, error) {
 	return db.Open(cfg.Cemetery.DBPath)
+}
+
+// ── export ────────────────────────────────────────────────────────────────────
+
+func exportCmd() *cobra.Command {
+	var outPath string
+
+	cmd := &cobra.Command{
+		Use:   "export",
+		Short: "Export all buried errors to a Markdown file",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+			store, err := openStore(cfg)
+			if err != nil {
+				return err
+			}
+			defer store.Close()
+
+			burials, err := store.GetAll()
+			if err != nil {
+				return err
+			}
+			if len(burials) == 0 {
+				fmt.Println("The graveyard is empty — nothing to export.")
+				return nil
+			}
+
+			f, err := os.Create(outPath)
+			if err != nil {
+				return fmt.Errorf("create file: %w", err)
+			}
+			defer f.Close()
+
+			fmt.Fprintf(f, "# ⚰ Error Cemetery Export\n\n")
+			fmt.Fprintf(f, "_%d entries — exported %s_\n\n", len(burials), burials[0].BuriedAt.Format("2006-01-02"))
+			fmt.Fprintf(f, "---\n\n")
+
+			for _, b := range burials {
+				fmt.Fprintf(f, "## %d. %s\n\n", b.ID, firstLine(b.ErrorText))
+				fmt.Fprintf(f, "**Buried:** %s", b.BuriedAt.Format("2006-01-02 15:04"))
+				if b.Tags != "" {
+					fmt.Fprintf(f, " &nbsp;·&nbsp; **Tags:** %s", b.Tags)
+				}
+				if b.TimesDug > 0 {
+					fmt.Fprintf(f, " &nbsp;·&nbsp; **Dug:** %d×", b.TimesDug)
+				}
+				fmt.Fprintf(f, "\n\n")
+
+				fmt.Fprintf(f, "### Error\n\n```\n%s\n```\n\n", b.ErrorText)
+				fmt.Fprintf(f, "### Fix\n\n%s\n\n", b.FixText)
+
+				if b.Context != "" {
+					fmt.Fprintf(f, "### Context\n\n%s\n\n", b.Context)
+				}
+
+				fmt.Fprintf(f, "---\n\n")
+			}
+
+			fmt.Printf("⚰  Exported %d entries → %s\n", len(burials), outPath)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&outPath, "out", "o", "cemetery-export.md", "output file path")
+	return cmd
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i != -1 {
+		return strings.TrimSpace(s[:i])
+	}
+	return strings.TrimSpace(s)
 }

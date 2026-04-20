@@ -39,6 +39,14 @@ Add the binary to a directory on your `$PATH`.
 
 ## Commands
 
+### `init` — First-time setup
+
+```bash
+cemetery init
+```
+
+Creates the config file and initialises the SQLite database. Safe to re-run — existing files are never overwritten. **Run this once after placing the binary.**
+
 ### `bury` — Record an error and its fix
 
 ```bash
@@ -50,6 +58,15 @@ You will be prompted for:
 - The error message / description
 - The fix you applied
 - Optional tags
+
+### `unbury` — Delete a buried error
+
+```bash
+cemetery unbury 42          # prompts for confirmation
+cemetery unbury 42 --force  # skips confirmation
+```
+
+Permanently removes the entry with the given ID. Use `cemetery visit` to find IDs.
 
 ### `dig` — Search for a buried error
 
@@ -91,6 +108,15 @@ cemetery config
 
 Creates the config file if it does not exist, then opens it in `$EDITOR` (falls back to `nano`).
 
+### `export` — Export the graveyard to Markdown
+
+```bash
+cemetery export                        # writes cemetery-export.md
+cemetery export -o /path/to/file.md   # custom output path
+```
+
+Exports every buried error as a structured Markdown file with headings, error text, fix, optional context, tags, and dig count.
+
 ---
 
 ## Configuration
@@ -99,7 +125,7 @@ Config is stored at `~/.config/cemetery/config.toml` (follows the OS config dir 
 
 ```toml
 [cemetery]
-db_path    = ""      # default: ~/.local/share/cemetery/cemetery.db
+db_path    = ""      # default: same directory as the binary (cemetery.db)
 smart_mode = false   # set true to always use Claude re-ranking
 
 [claude]
