@@ -272,3 +272,41 @@ func trim(s string) string {
 	}
 	return s[start:end]
 }
+
+// ── comments ──────────────────────────────────────────────────────────────────
+
+type Comment struct {
+	ID          int64
+	BurialID    int64
+	CommentText string
+	CreatedAt   time.Time
+}
+
+func (s *Store) AddComment(burialID int64, text string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO comments (burial_id, comment_text) VALUES (?, ?)`,
+		burialID, text,
+	)
+	return err
+}
+
+func (s *Store) GetComments(burialID int64) ([]Comment, error) {
+	rows, err := s.db.Query(
+		`SELECT id, burial_id, comment_text, created_at FROM comments WHERE burial_id = ? ORDER BY created_at ASC`,
+		burialID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var comments []Comment
+	for rows.Next() {
+		var c Comment
+		if err := rows.Scan(&c.ID, &c.BurialID, &c.CommentText, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		comments = append(comments, c)
+	}
+	return comments, rows.Err()
+}

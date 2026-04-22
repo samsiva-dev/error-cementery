@@ -54,6 +54,7 @@ func (m VisitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.filter, cmd = m.filter.Update(msg)
 				m.applyFilter()
 				m.cursor = 0
+				m.expanded = false
 				return m, cmd
 			}
 			return m, nil

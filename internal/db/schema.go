@@ -52,6 +52,13 @@ CREATE TABLE IF NOT EXISTS embeddings (
     burial_id   INTEGER PRIMARY KEY REFERENCES burials(id) ON DELETE CASCADE,
     vector_json TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS comments (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    burial_id    INTEGER NOT NULL REFERENCES burials(id) ON DELETE CASCADE,
+    comment_text TEXT NOT NULL,
+    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 `
 
 type Store struct {

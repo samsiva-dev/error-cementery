@@ -40,6 +40,7 @@ and dig them up when history repeats itself.`,
 		statsCmd(),
 		configCmd(),
 		exportCmd(),
+		commentCmd(),
 	)
 	return root
 }
@@ -433,4 +434,74 @@ func firstLine(s string) string {
 		return strings.TrimSpace(s[:i])
 	}
 	return strings.TrimSpace(s)
+}
+
+// ── comment ───────────────────────────────────────────────────────────────────
+
+func commentCmd() *cobra.Command {
+	var listOnly bool
+
+	cmd := &cobra.Command{
+		Use:   "comment <id>",
+		Short: "Add or list comments on a buried error",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id, err := strconv.ParseInt(args[0], 10, 64)
+			if err != nil || id <= 0 {
+				return fmt.Errorf("invalid id %q — must be a positive integer", args[0])
+			}
+
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+			store, err := openStore(cfg)
+			if err != nil {
+				return err
+			}
+			defer store.Close()
+
+			burial, err := store.GetByID(id)
+			if err != nil {
+				return fmt.Errorf("no entry with id %d", id)
+			}
+
+			if listOnly {
+				comments, err := store.GetComments(id)
+				if err != nil {
+					return fmt.Errorf("get comments: %w", err)
+				}
+				if len(comments) == 0 {
+					fmt.Printf("No comments on entry %d.\n", id)
+					return nil
+				}
+				fmt.Printf("\nComments on #%d — %s\n\n", burial.ID, firstLine(burial.ErrorText))
+				for _, c := range comments {
+					fmt.Printf("  [%s]\n  %s\n\n", c.CreatedAt.Format("2006-01-02 15:04"), c.CommentText)
+				}
+				return nil
+			}
+
+			header := fmt.Sprintf("#%d — %s", burial.ID, firstLine(burial.ErrorText))
+			result, err := tui.RunComment(header)
+			if err != nil {
+				return err
+			}
+			if !result.Submitted {
+				fmt.Println("Comment cancelled.")
+				return nil
+			}
+			if strings.TrimSpace(result.Text) == "" {
+				return fmt.Errorf("comment text cannot be empty")
+			}
+			if err := store.AddComment(id, strings.TrimSpace(result.Text)); err != nil {
+				return fmt.Errorf("save comment: %w", err)
+			}
+			fmt.Printf("  Comment added to entry %d.\n", id)
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVarP(&listOnly, "list", "l", false, "list existing comments instead of adding one")
+	return cmd
 }

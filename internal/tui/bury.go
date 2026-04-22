@@ -25,6 +25,8 @@ type BuryModel struct {
 	submitted   bool
 	cancelled   bool
 	tagSuggest  []string
+	tagHints    []string
+	tagHintIdx  int
 	width       int
 	height      int
 }
@@ -72,6 +74,55 @@ func (m BuryModel) Init() tea.Cmd {
 	return textarea.Blink
 }
 
+// computeTagHints updates tagHints based on the current partial tag being typed.
+func (m *BuryModel) computeTagHints() {
+	ti := m.fields[fieldTags].(textinput.Model)
+	val := ti.Value()
+
+	parts := strings.Split(val, ",")
+	partial := strings.TrimSpace(parts[len(parts)-1])
+
+	if partial == "" {
+		m.tagHints = nil
+		m.tagHintIdx = 0
+		return
+	}
+
+	lp := strings.ToLower(partial)
+	var hints []string
+	for _, tag := range m.tagSuggest {
+		lt := strings.ToLower(tag)
+		if strings.HasPrefix(lt, lp) && lt != lp {
+			hints = append(hints, tag)
+			if len(hints) >= 5 {
+				break
+			}
+		}
+	}
+	m.tagHints = hints
+	if m.tagHintIdx >= len(hints) {
+		m.tagHintIdx = 0
+	}
+}
+
+// acceptTagSuggestion replaces the last partial tag token with the given suggestion.
+func (m *BuryModel) acceptTagSuggestion(tag string) {
+	ti := m.fields[fieldTags].(textinput.Model)
+	val := ti.Value()
+
+	idx := strings.LastIndex(val, ",")
+	var newVal string
+	if idx == -1 {
+		newVal = tag + ","
+	} else {
+		newVal = val[:idx+1] + tag + ","
+	}
+	ti.SetValue(newVal)
+	m.fields[fieldTags] = ti
+	m.tagHints = nil
+	m.tagHintIdx = 0
+}
+
 func (m BuryModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -89,17 +140,52 @@ func (m BuryModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			m.active--
+			m.tagHints = nil
+			m.tagHintIdx = 0
 			m.focusField(m.active)
+		case "up":
+			if m.active == fieldTags && len(m.tagHints) > 0 {
+				if m.tagHintIdx > 0 {
+					m.tagHintIdx--
+				}
+				return m, nil
+			}
+		case "down":
+			if m.active == fieldTags && len(m.tagHints) > 0 {
+				if m.tagHintIdx < len(m.tagHints)-1 {
+					m.tagHintIdx++
+				}
+				return m, nil
+			}
+		case "enter":
+			if m.active == fieldTags && len(m.tagHints) > 0 {
+				m.acceptTagSuggestion(m.tagHints[m.tagHintIdx])
+				return m, nil
+			}
 		case "tab", "ctrl+n":
+			if m.active == fieldTags && len(m.tagHints) > 0 {
+				m.acceptTagSuggestion(m.tagHints[m.tagHintIdx])
+				return m, nil
+			}
+			m.tagHints = nil
+			m.tagHintIdx = 0
 			m.active = (m.active + 1) % fieldCount
 			m.focusField(m.active)
+			if m.active == fieldTags {
+				m.computeTagHints()
+			}
 		case "shift+tab", "ctrl+p":
+			m.tagHints = nil
+			m.tagHintIdx = 0
 			if m.active == 0 {
 				m.active = fieldCount - 1
 			} else {
 				m.active--
 			}
 			m.focusField(m.active)
+			if m.active == fieldTags {
+				m.computeTagHints()
+			}
 		case "ctrl+s", "ctrl+d":
 			m.submitted = true
 			return m, tea.Quit
@@ -124,6 +210,7 @@ func (m BuryModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		ti := m.fields[fieldTags].(textinput.Model)
 		ti, cmd = ti.Update(msg)
 		m.fields[fieldTags] = ti
+		m.computeTagHints()
 	}
 	return m, cmd
 }
@@ -175,7 +262,25 @@ func (m BuryModel) View() string {
 				field = styleInputInactive.Render(v.View())
 			}
 		}
-		sb.WriteString(field + "\n\n")
+		sb.WriteString(field + "\n")
+
+		// Show tag suggestions below the Tags field when active
+		if i == fieldTags && m.active == fieldTags && len(m.tagHints) > 0 {
+			sb.WriteString(styleHelp.Render("  suggestions: "))
+			for j, hint := range m.tagHints {
+				if j == m.tagHintIdx {
+					sb.WriteString(styleSelected.Render(" " + hint + " "))
+				} else {
+					sb.WriteString(styleTag.Render(hint))
+				}
+				if j < len(m.tagHints)-1 {
+					sb.WriteString("  ")
+				}
+			}
+			sb.WriteString("\n" + styleHelp.Render("  ↑↓ navigate  tab/enter accept") + "\n")
+		}
+
+		sb.WriteString("\n")
 	}
 
 	help := styleHelp.Render("  tab/ctrl+n next  shift+tab/ctrl+p prev  ctrl+s submit  esc/ctrl+c cancel")
