@@ -191,7 +191,8 @@ func digCmd() *cobra.Command {
 				return nil
 			}
 
-			return tui.RunDig(results)
+			comments, _ := store.GetAllComments()
+			return tui.RunDig(results, comments)
 		},
 	}
 
@@ -225,7 +226,8 @@ func visitCmd() *cobra.Command {
 				fmt.Println("The graveyard is empty. Use `cemetery bury` to add your first error.")
 				return nil
 			}
-			return tui.RunVisit(burials)
+			comments, _ := store.GetAllComments()
+			return tui.RunVisit(burials, comments)
 		},
 	}
 }

@@ -20,15 +20,15 @@ const (
 )
 
 type BuryModel struct {
-	fields      [fieldCount]interface{} // textarea or textinput
-	active      buryField
-	submitted   bool
-	cancelled   bool
-	tagSuggest  []string
-	tagHints    []string
-	tagHintIdx  int
-	width       int
-	height      int
+	fields     [fieldCount]interface{} // textarea or textinput
+	active     buryField
+	submitted  bool
+	cancelled  bool
+	tagSuggest []string
+	tagHints   []string
+	tagHintIdx int
+	width      int
+	height     int
 }
 
 type BuryResult struct {

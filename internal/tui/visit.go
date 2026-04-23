@@ -13,6 +13,7 @@ import (
 type VisitModel struct {
 	all      []db.Burial
 	filtered []db.Burial
+	comments map[int64][]db.Comment
 	cursor   int
 	filter   textinput.Model
 	expanded bool
@@ -20,7 +21,7 @@ type VisitModel struct {
 	height   int
 }
 
-func NewVisitModel(burials []db.Burial) VisitModel {
+func NewVisitModel(burials []db.Burial, comments map[int64][]db.Comment) VisitModel {
 	fi := textinput.New()
 	fi.Placeholder = "filter by tag or keyword..."
 	fi.Width = 40
@@ -28,6 +29,7 @@ func NewVisitModel(burials []db.Burial) VisitModel {
 	return VisitModel{
 		all:      burials,
 		filtered: burials,
+		comments: comments,
 		filter:   fi,
 		width:    80,
 		height:   24,
@@ -138,7 +140,8 @@ func (m VisitModel) View() string {
 	for i := start; i < len(m.filtered); i++ {
 		r := match.MatchResult{Burial: m.filtered[i], MatchType: ""}
 		selected := i == m.cursor
-		card := renderGravestone(r, selected, m.expanded && selected, cardWidth)
+		cmts := m.comments[m.filtered[i].ID]
+		card := renderGravestone(r, selected, m.expanded && selected, cardWidth, cmts)
 		sb.WriteString(card + "\n")
 		lines := strings.Count(card, "\n") + 1
 		visibleLines -= lines
@@ -180,8 +183,8 @@ func topTagFrom(burials []db.Burial) string {
 	return ""
 }
 
-func RunVisit(burials []db.Burial) error {
-	m := NewVisitModel(burials)
+func RunVisit(burials []db.Burial, comments map[int64][]db.Comment) error {
+	m := NewVisitModel(burials, comments)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err := p.Run()
 	return err

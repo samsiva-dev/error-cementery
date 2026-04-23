@@ -310,3 +310,24 @@ func (s *Store) GetComments(burialID int64) ([]Comment, error) {
 	}
 	return comments, rows.Err()
 }
+
+// GetAllComments returns all comments keyed by burial ID.
+func (s *Store) GetAllComments() (map[int64][]Comment, error) {
+	rows, err := s.db.Query(
+		`SELECT id, burial_id, comment_text, created_at FROM comments ORDER BY burial_id, created_at ASC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := map[int64][]Comment{}
+	for rows.Next() {
+		var c Comment
+		if err := rows.Scan(&c.ID, &c.BurialID, &c.CommentText, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		result[c.BurialID] = append(result[c.BurialID], c)
+	}
+	return result, rows.Err()
+}

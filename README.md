@@ -10,7 +10,8 @@ Stop solving the same error twice. Record what broke and how you fixed it, then 
 
 - **Three-pass search**: exact hash → BM25 full-text → Claude semantic re-ranking
 - **Interactive TUI**: Bubbletea-powered forms for burying and browsing
-- **Tag support**: Categorise errors for easier retrieval
+- **Tag support**: Categorise errors with auto-suggest from existing tags
+- **Comments**: Annotate any buried error with timestamped comments
 - **Clipboard integration**: Pre-fill error text straight from your clipboard
 - **Smart mode**: Optional Claude AI re-ranking for fuzzy / conceptual matches
 - **Persistent storage**: SQLite database in your home directory
@@ -57,7 +58,8 @@ cemetery bury --clip     # pre-fill error text from clipboard
 You will be prompted for:
 - The error message / description
 - The fix you applied
-- Optional tags
+- Optional context (file/project/notes)
+- Optional tags — starts suggesting matching existing tags as you type; use **↑/↓** to navigate suggestions and **Tab** or **Enter** to accept
 
 ### `unbury` — Delete a buried error
 
@@ -84,13 +86,15 @@ Search uses a three-pass ranking strategy:
 | 2 | BM25 full-text search (FTS5) | Always |
 | 3 | Claude semantic re-ranking | `--smart` flag or `smart_mode = true` in config |
 
+Press **Enter** to expand a result and see the full fix text plus any comments that have been added to that entry.
+
 ### `visit` — Browse the full graveyard
 
 ```bash
 cemetery visit
 ```
 
-Opens a scrollable TUI listing all buried errors with their fixes and metadata.
+Opens a scrollable TUI listing all buried errors with their fixes and metadata. Press **Enter** on any entry to expand it — the full fix text and any comments are shown inline. Press **/** to filter by keyword or tag.
 
 ### `stats` — Show cemetery statistics
 
@@ -116,6 +120,15 @@ cemetery export -o /path/to/file.md   # custom output path
 ```
 
 Exports every buried error as a structured Markdown file with headings, error text, fix, optional context, tags, and dig count.
+
+### `comment` — Annotate a buried error
+
+```bash
+cemetery comment 42          # open TUI to write a comment on entry #42
+cemetery comment 42 --list   # list all existing comments for entry #42
+```
+
+Comments are timestamped and stored alongside the burial. They appear in the expanded card view inside `dig` and `visit`.
 
 ---
 

@@ -6,11 +6,13 @@ import (
 
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/samsiva-dev/error-cemetery/internal/db"
 	"github.com/samsiva-dev/error-cemetery/internal/match"
 )
 
 type DigModel struct {
 	results  []match.MatchResult
+	comments map[int64][]db.Comment
 	cursor   int
 	expanded bool
 	width    int
@@ -19,8 +21,8 @@ type DigModel struct {
 	copied   bool
 }
 
-func NewDigModel(results []match.MatchResult) DigModel {
-	return DigModel{results: results, width: 80, height: 24}
+func NewDigModel(results []match.MatchResult, comments map[int64][]db.Comment) DigModel {
+	return DigModel{results: results, comments: comments, width: 80, height: 24}
 }
 
 func (m DigModel) Init() tea.Cmd {
@@ -85,7 +87,8 @@ func (m DigModel) View() string {
 
 	for i, r := range m.results {
 		selected := i == m.cursor
-		sb.WriteString(renderGravestone(r, selected, m.expanded && selected, cardWidth))
+		cmts := m.comments[r.Burial.ID]
+		sb.WriteString(renderGravestone(r, selected, m.expanded && selected, cardWidth, cmts))
 		sb.WriteString("\n")
 	}
 
@@ -102,7 +105,7 @@ func (m DigModel) View() string {
 	return sb.String()
 }
 
-func renderGravestone(r match.MatchResult, selected, expanded bool, width int) string {
+func renderGravestone(r match.MatchResult, selected, expanded bool, width int, comments []db.Comment) string {
 	b := r.Burial
 
 	badge := matchBadge(r.MatchType)
@@ -125,6 +128,9 @@ func renderGravestone(r match.MatchResult, selected, expanded bool, width int) s
 	if b.Context != "" {
 		metaParts = append(metaParts, b.Context)
 	}
+	if len(comments) > 0 {
+		metaParts = append(metaParts, fmt.Sprintf("%d comment(s)", len(comments)))
+	}
 	meta := styleMeta.Render(strings.Join(metaParts, "  ·  "))
 
 	var tags string
@@ -146,6 +152,13 @@ func renderGravestone(r match.MatchResult, selected, expanded bool, width int) s
 	content.WriteString(meta)
 	if tags != "" {
 		content.WriteString("\n" + tags)
+	}
+
+	if expanded && len(comments) > 0 {
+		content.WriteString("\n\n" + styleInputLabel.Render("Comments"))
+		for _, c := range comments {
+			content.WriteString("\n" + styleMeta.Render(c.CreatedAt.Format("02 Jan 2006 15:04")) + "  " + c.CommentText)
+		}
 	}
 
 	style := styleCard
@@ -180,8 +193,8 @@ func truncate(s string, max int) string {
 	return string(runes[:max-3]) + "..."
 }
 
-func RunDig(results []match.MatchResult) error {
-	m := NewDigModel(results)
+func RunDig(results []match.MatchResult, comments map[int64][]db.Comment) error {
+	m := NewDigModel(results, comments)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err := p.Run()
 	return err
